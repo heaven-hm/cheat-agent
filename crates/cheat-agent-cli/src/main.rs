@@ -123,6 +123,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let updated_json = serde_json::to_string_pretty(&def)?;
             fs::write(&cheat, updated_json)?;
             println!("[+] Updated cheat definition saved to {:?}", cheat);
+            if report.overall_status != "PASSED" {
+                eprintln!("[!] Cheat not verified; exiting with status 2");
+                std::process::exit(2);
+            }
         }
         Commands::Generate { cheat, lang, output } => {
             let content = fs::read_to_string(&cheat)?;
