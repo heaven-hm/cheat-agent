@@ -43,8 +43,11 @@ bool write_process_memory(uint32_t pid, uint64_t address, const void* data, size
 #if defined(_WIN32)
     HANDLE hProcess = OpenProcess(PROCESS_VM_WRITE | PROCESS_VM_OPERATION, FALSE, pid);
     if (!hProcess) return false;
+    DWORD old_protect = 0;
+    VirtualProtectEx(hProcess, reinterpret_cast<LPVOID>(address), size, PAGE_EXECUTE_READWRITE, &old_protect);
     SIZE_T written = 0;
     BOOL ok = WriteProcessMemory(hProcess, reinterpret_cast<LPVOID>(address), data, size, &written);
+    VirtualProtectEx(hProcess, reinterpret_cast<LPVOID>(address), size, old_protect, &old_protect);
     CloseHandle(hProcess);
     return ok && (written == size);
 #elif defined(__APPLE__)
@@ -105,6 +108,18 @@ uint32_t find_process_by_name(const std::string& process_name) {
         } while (Process32Next(snapshot, &entry));
     }
     CloseHandle(snapshot);
+#elif defined(__APPLE__)
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "pgrep -i -f '%s' | tail -n 1", process_name.c_str());
+    FILE* fp = popen(cmd, "r");
+    if (fp) {
+        char buf[64];
+        if (fgets(buf, sizeof(buf), fp)) {
+            pclose(fp);
+            return static_cast<uint32_t>(std::stoul(buf));
+        }
+        pclose(fp);
+    }
 #endif
     (void)process_name;
     return 0;
@@ -140,32 +155,56 @@ int main(int argc, char** argv) {
     std::cout << "[+] Verified Target Memory Layout:\n";
     std::cout << "    - Gun_Fire Hook:          0x00478BA0\n";
     std::cout << "    - Ammo Decrement Opcode:   0x00478BB2 (dec [esi+08])\n";
-    std::cout << "    - Player Damage Hook:      0x00412440\n";
+    std::cout << "    - Player Damage Hook:      0x00412440 (ret 0004)\n";
     std::cout << "    - Health Scale:            0x00460400\n\n";
 
-    // Original ammo decrement instruction: FF 4E 08 (3 bytes)
+    // 1. Infinite Ammo Patch: FF 4E 08 (3 bytes) -> 90 90 90
     const uint64_t ammo_dec_addr = 0x00478BB2;
     const uint8_t nop_patch[3] = { 0x90, 0x90, 0x90 };
-    uint8_t original_bytes[3] = { 0xFF, 0x4E, 0x08 };
+    uint8_t original_ammo_bytes[3] = { 0xFF, 0x4E, 0x08 };
 
     // Read current bytes to preserve restoration fidelity
-    read_process_memory(pid, ammo_dec_addr, original_bytes, sizeof(original_bytes));
+    read_process_memory(pid, ammo_dec_addr, original_ammo_bytes, sizeof(original_ammo_bytes));
+
+    // 2. God Mode Patch: 55 8B EC (push ebp; mov ebp, esp) -> C2 04 00 (ret 0004)
+    const uint64_t god_mode_addr = 0x00412440;
+    const uint8_t ret_patch[3] = { 0xC2, 0x04, 0x00 };
+    uint8_t original_god_bytes[3] = { 0x55, 0x8B, 0xEC };
+
+    read_process_memory(pid, god_mode_addr, original_god_bytes, sizeof(original_god_bytes));
 
     std::cout << "[+] Applying Infinite Ammo Patch (NOP dec [esi+08] at 0x00478BB2)...\n";
-    if (write_process_memory(pid, ammo_dec_addr, nop_patch, sizeof(nop_patch))) {
+    bool ammo_ok = write_process_memory(pid, ammo_dec_addr, nop_patch, sizeof(nop_patch));
+    if (ammo_ok) {
         std::cout << "[+] SUCCESS: Infinite Ammo patch active.\n";
     } else {
         std::cout << "[!] Notice: Direct patch requires appropriate process permissions.\n";
     }
 
-    std::cout << "\n[+] Trainer Active. Press Ctrl+C to revert patches and detach.\n";
-
-    while (g_running.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::cout << "[+] Applying God Mode Patch (ret 4 at 0x00412440)...\n";
+    bool god_ok = write_process_memory(pid, god_mode_addr, ret_patch, sizeof(ret_patch));
+    if (god_ok) {
+        std::cout << "[+] SUCCESS: God Mode patch active.\n";
+    } else {
+        std::cout << "[!] Notice: Direct patch requires appropriate process permissions.\n";
     }
 
-    std::cout << "\n[+] Reverting Infinite Ammo patch to original bytecode...\n";
-    write_process_memory(pid, ammo_dec_addr, original_bytes, sizeof(original_bytes));
+    std::cout << "\n[+] ========================================================\n";
+    std::cout << "[+] TRAINER ACTIVE: Infinite Ammo & God Mode ENABLED\n";
+    std::cout << "[+] Press Ctrl+C in this terminal to revert and deactivate.\n";
+    std::cout << "[+] ========================================================\n";
+
+    while (g_running.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    std::cout << "\n[+] Reverting patches to original bytecode...\n";
+    if (ammo_ok) {
+        write_process_memory(pid, ammo_dec_addr, original_ammo_bytes, sizeof(original_ammo_bytes));
+    }
+    if (god_ok) {
+        write_process_memory(pid, god_mode_addr, original_god_bytes, sizeof(original_god_bytes));
+    }
     std::cout << "[+] Clean detachment complete. Exiting.\n";
 
     return 0;
