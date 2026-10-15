@@ -154,6 +154,21 @@ int32_t MemoryScanner::first_scan(
             return CHEAT_STATUS_INVALID_ARGUMENT;
     }
 
+    // The C ABI supplies one declared width for both value pointers.
+    // Fail closed before any typed memcpy or byte-array memcmp.
+    if (data_size_ == 0 || data_size_ > kChunkSize)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if ((val1 || val2) && val_size != data_size_)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode == CHEAT_SCAN_MODE_RANGE && (!val1 || !val2))
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode == CHEAT_SCAN_MODE_EXACT && !val1)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode != CHEAT_SCAN_MODE_EXACT &&
+        scan_mode != CHEAT_SCAN_MODE_UNKNOWN_INITIAL &&
+        scan_mode != CHEAT_SCAN_MODE_RANGE)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+
     auto regions = backend_->query_regions();
     std::vector<uint8_t> chunk(kChunkSize);
 
@@ -202,11 +217,20 @@ int32_t MemoryScanner::next_scan(
     int32_t scan_mode,
     const void* val1,
     const void* val2,
-    size_t /*val_size*/) {
+    size_t val_size) {
 
     if (!backend_ || !backend_->is_alive()) {
         return CHEAT_STATUS_NOT_CONNECTED;
     }
+
+    if ((val1 || val2) && val_size != data_size_)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode == CHEAT_SCAN_MODE_EXACT && !val1)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode == CHEAT_SCAN_MODE_RANGE && (!val1 || !val2))
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode < CHEAT_SCAN_MODE_EXACT || scan_mode > CHEAT_SCAN_MODE_RANGE)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
 
     if (candidates_.empty()) {
         return CHEAT_STATUS_OK;
