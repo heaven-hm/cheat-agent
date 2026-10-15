@@ -21,16 +21,16 @@ void on_interrupt(int) { running.store(false); }
 DWORD find_pid(const char* name) {
     const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE) return 0;
-    PROCESSENTRY32A entry{};
+    PROCESSENTRY32 entry{};
     entry.dwSize = sizeof(entry);
     DWORD pid = 0;
-    if (Process32FirstA(snapshot, &entry)) {
+    if (Process32First(snapshot, &entry)) {
         do {
             if (_stricmp(entry.szExeFile, name) == 0) {
                 pid = entry.th32ProcessID;
                 break;
             }
-        } while (Process32NextA(snapshot, &entry));
+        } while (Process32Next(snapshot, &entry));
     }
     CloseHandle(snapshot);
     return pid;
