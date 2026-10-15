@@ -155,10 +155,27 @@ impl McpServer {
                 }))
             }
             "memory_read" => {
-                let addr_str = arguments["address"].as_str().unwrap_or("0x0");
-                let address = u64::from_str_radix(addr_str.trim_start_matches("0x"), 16)
-                    .map_err(|e| CheatError::InvalidArgument(e.to_string()))?;
-                let size = arguments["size"].as_u64().unwrap_or(4) as usize;
+                let addr_str = arguments["address"].as_str().ok_or_else(|| {
+                    CheatError::InvalidArgument("address must be a hexadecimal string".into())
+                })?;
+                let digits = addr_str.strip_prefix("0x").or_else(|| addr_str.strip_prefix("0X"))
+                    .unwrap_or(addr_str);
+                if digits.is_empty() {
+                    return Err(CheatError::InvalidArgument("empty memory address".into()));
+                }
+                let address = u64::from_str_radix(digits, 16)
+                    .map_err(|_| CheatError::InvalidArgument("invalid hexadecimal address".into()))?;
+                let size_u64 = arguments["size"].as_u64().ok_or_else(|| {
+                    CheatError::InvalidArgument("size must be a positive integer".into())
+                })?;
+                const MAX_READ_SIZE: u64 = 64 * 1024;
+                if address == 0 || size_u64 == 0 || size_u64 > MAX_READ_SIZE
+                    || address.checked_add(size_u64).is_none() {
+                    return Err(CheatError::InvalidArgument(
+                        "memory read address/size out of bounds (maximum 65536 bytes)".into()
+                    ));
+                }
+                let size = size_u64 as usize;
 
                 let guard = self.backend.lock().unwrap();
                 let backend = guard.as_ref().ok_or(CheatError::NotConnected)?;
