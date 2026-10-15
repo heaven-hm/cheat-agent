@@ -47,6 +47,12 @@ jobs:
       - name: Run Native Unit Tests
         run: ctest --test-dir build --output-on-failure -C Release
 
+      - name: Verify optional GTLibCpp-off build
+        run: |
+          cmake -S . -B build-without-gtlibcpp -DCHEAT_AGENT_ENABLE_GTLIBCPP=OFF
+          cmake --build build-without-gtlibcpp --config Release
+          ctest --test-dir build-without-gtlibcpp --output-on-failure -C Release
+
       - name: Build & Test Rust Workspace
         run: cargo test --workspace --verbose
 
