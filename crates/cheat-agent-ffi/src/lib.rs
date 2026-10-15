@@ -77,12 +77,39 @@ impl ProcessBackend {
             )
         };
         if status != 0 {
+            if status == sys::CHEAT_STATUS_PERMISSION_DENIED {
+                return Err(CheatError::PermissionDenied(
+                    "write denied: policy authorization required; call authorize_write before mutating memory".into(),
+                ));
+            }
             return Err(CheatError::WriteFailed {
                 address,
                 message: format!("status code {}", status),
             });
         }
         Ok(bytes_written)
+    }
+
+    pub fn authorize_write(&self, authorized: bool) -> Result<()> {
+        if self.raw.is_null() {
+            return Err(CheatError::NotConnected);
+        }
+        let status = unsafe { sys::cheat_backend_authorize_write(self.raw, if authorized { 1 } else { 0 }) };
+        if status != 0 {
+            return Err(CheatError::Internal(format!("failed to set write authorization: {}", status)));
+        }
+        Ok(())
+    }
+
+    pub fn is_write_authorized(&self) -> bool {
+        if self.raw.is_null() {
+            return false;
+        }
+        unsafe { sys::cheat_backend_is_write_authorized(self.raw) != 0 }
+    }
+
+    pub fn has_gtlibcpp() -> bool {
+        unsafe { sys::cheat_backend_has_gtlibcpp() != 0 }
     }
 
     pub fn query_regions(&self) -> Result<Vec<MemoryRegion>> {

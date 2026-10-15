@@ -38,6 +38,16 @@ pub struct CheatPointerChain {
     pub offset_count: usize,
 }
 
+pub const CHEAT_STATUS_OK: i32 = 0;
+pub const CHEAT_STATUS_ERROR: i32 = -1;
+pub const CHEAT_STATUS_INVALID_ARGUMENT: i32 = -2;
+pub const CHEAT_STATUS_NOT_CONNECTED: i32 = -3;
+pub const CHEAT_STATUS_PERMISSION_DENIED: i32 = -4;
+pub const CHEAT_STATUS_NOT_FOUND: i32 = -5;
+pub const CHEAT_STATUS_PARTIAL_READ: i32 = -6;
+pub const CHEAT_STATUS_CAPABILITY_MISSING: i32 = -7;
+pub const CHEAT_STATUS_TIMEOUT: i32 = -8;
+
 extern "C" {
     pub fn cheat_backend_create(pid: u32, out_backend: *mut *mut CheatProcessBackend) -> i32;
     pub fn cheat_backend_destroy(backend: *mut CheatProcessBackend);
@@ -47,6 +57,9 @@ extern "C" {
     pub fn cheat_backend_write_memory(backend: *mut CheatProcessBackend, address: u64, buffer: *const c_void, size: usize, bytes_written: *mut usize) -> i32;
     pub fn cheat_backend_query_regions(backend: *mut CheatProcessBackend, out_regions: *mut CheatMemoryRegion, max_regions: usize, count: *mut usize) -> i32;
     pub fn cheat_backend_query_modules(backend: *mut CheatProcessBackend, out_modules: *mut CheatModuleInfo, max_modules: usize, count: *mut usize) -> i32;
+    pub fn cheat_backend_authorize_write(backend: *mut CheatProcessBackend, authorized: i32) -> i32;
+    pub fn cheat_backend_is_write_authorized(backend: *mut CheatProcessBackend) -> i32;
+    pub fn cheat_backend_has_gtlibcpp() -> i32;
 
     pub fn cheat_scanner_create(backend: *mut CheatProcessBackend, out_scanner: *mut *mut CheatMemoryScanner) -> i32;
     pub fn cheat_scanner_destroy(scanner: *mut CheatMemoryScanner);

@@ -57,6 +57,7 @@ target_include_directories(cheat_agent_native PUBLIC
 
 if(CHEAT_AGENT_ENABLE_GTLIBCPP)
     target_link_libraries(cheat_agent_native PUBLIC gtlibcpp::core)
+    target_compile_definitions(cheat_agent_native PUBLIC CHEAT_AGENT_ENABLE_GTLIBCPP=1)
 endif()
 
 if(MSVC)

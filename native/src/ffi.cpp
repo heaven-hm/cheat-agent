@@ -6,6 +6,10 @@
 #include <memory>
 #include <algorithm>
 
+#if defined(CHEAT_AGENT_ENABLE_GTLIBCPP)
+#include "gtlibcpp_adapter.hpp"
+#endif
+
 struct CheatProcessBackend {
     std::shared_ptr<cheat_agent::IProcessBackend> impl;
 };
@@ -19,13 +23,29 @@ extern "C" {
 int32_t cheat_backend_create(uint32_t pid, CheatProcessBackend** out_backend) {
     if (!out_backend) return CHEAT_STATUS_INVALID_ARGUMENT;
     try {
-        auto backend = cheat_agent::IProcessBackend::create(pid);
-        if (!backend) return CHEAT_STATUS_ERROR;
+        std::shared_ptr<cheat_agent::IProcessBackend> raw_backend =
+            cheat_agent::IProcessBackend::create(pid);
+        if (!raw_backend) return CHEAT_STATUS_ERROR;
+
+#if defined(CHEAT_AGENT_ENABLE_GTLIBCPP)
+        gtlibcpp::TargetIdentity ident{};
+        ident.pid = pid;
+        auto memory_adapter = std::make_shared<cheat_agent::GtlibMemoryBackendAdapter>(
+            raw_backend, ident);
+        auto session = std::make_shared<gtlibcpp::MemorySession>(memory_adapter);
+        auto gtlib_backend = std::make_shared<cheat_agent::GtlibProcessBackendAdapter>(
+            session, raw_backend, true);
 
         auto wrapper = new CheatProcessBackend();
-        wrapper->impl = std::move(backend);
+        wrapper->impl = std::move(gtlib_backend);
         *out_backend = wrapper;
         return CHEAT_STATUS_OK;
+#else
+        auto wrapper = new CheatProcessBackend();
+        wrapper->impl = std::move(raw_backend);
+        *out_backend = wrapper;
+        return CHEAT_STATUS_OK;
+#endif
     } catch (...) {
         return CHEAT_STATUS_ERROR;
     }
@@ -121,6 +141,39 @@ int32_t cheat_backend_query_modules(
     } catch (...) {
         return CHEAT_STATUS_ERROR;
     }
+}
+
+int32_t cheat_backend_authorize_write(CheatProcessBackend* backend, int32_t authorized) {
+    if (!backend || !backend->impl) return CHEAT_STATUS_NOT_CONNECTED;
+#if defined(CHEAT_AGENT_ENABLE_GTLIBCPP)
+    auto* gtlib_backend = dynamic_cast<cheat_agent::GtlibProcessBackendAdapter*>(backend->impl.get());
+    if (gtlib_backend) {
+        gtlib_backend->authorize_write(authorized != 0);
+        return CHEAT_STATUS_OK;
+    }
+#else
+    (void)authorized;
+#endif
+    return CHEAT_STATUS_OK;
+}
+
+int32_t cheat_backend_is_write_authorized(CheatProcessBackend* backend) {
+    if (!backend || !backend->impl) return 0;
+#if defined(CHEAT_AGENT_ENABLE_GTLIBCPP)
+    auto* gtlib_backend = dynamic_cast<cheat_agent::GtlibProcessBackendAdapter*>(backend->impl.get());
+    if (gtlib_backend) {
+        return gtlib_backend->is_write_authorized() ? 1 : 0;
+    }
+#endif
+    return 1;
+}
+
+int32_t cheat_backend_has_gtlibcpp(void) {
+#if defined(CHEAT_AGENT_ENABLE_GTLIBCPP)
+    return 1;
+#else
+    return 0;
+#endif
 }
 
 int32_t cheat_scanner_create(CheatProcessBackend* backend, CheatMemoryScanner** out_scanner) {

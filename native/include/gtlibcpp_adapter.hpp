@@ -69,6 +69,11 @@ public:
         std::shared_ptr<gtlibcpp::MemorySession> session,
         bool require_policy_authorization = true);
 
+    explicit GtlibProcessBackendAdapter(
+        std::shared_ptr<gtlibcpp::MemorySession> session,
+        std::shared_ptr<IProcessBackend> underlying_backend,
+        bool require_policy_authorization = true);
+
     ~GtlibProcessBackendAdapter() override = default;
 
     [[nodiscard]] bool is_alive() const noexcept override;
@@ -106,6 +111,7 @@ public:
 
 private:
     std::shared_ptr<gtlibcpp::MemorySession> session_;
+    std::shared_ptr<IProcessBackend> underlying_backend_{nullptr};
     bool require_policy_authorization_{true};
     bool write_authorized_{false};
 };
