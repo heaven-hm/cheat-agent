@@ -280,6 +280,7 @@ impl Drop for ProcessBackend {
 
 pub struct MemoryScanner {
     raw: *mut sys::CheatMemoryScanner,
+    data_size: usize,
 }
 
 unsafe impl Send for MemoryScanner {}
@@ -298,7 +299,7 @@ impl MemoryScanner {
                 status
             )));
         }
-        Ok(Self { raw })
+        Ok(Self { raw, data_size: 0 })
     }
 
     pub fn reset(&mut self) -> Result<()> {
@@ -309,6 +310,7 @@ impl MemoryScanner {
         if status != 0 {
             return Err(CheatError::Internal("scanner reset failed".to_string()));
         }
+        self.data_size = 0;
         Ok(())
     }
 
@@ -322,9 +324,17 @@ impl MemoryScanner {
         if self.raw.is_null() {
             return Err(CheatError::NotConnected);
         }
+        let size = match data_type {
+            DataType::ByteArray | DataType::String => val1.or(val2).map_or(0, |v| v.len()),
+            _ => data_type.byte_size(),
+        };
+        if size == 0 || size > 4 * 1024 ||
+            val1.is_some_and(|v| v.len() != size) ||
+            val2.is_some_and(|v| v.len() != size) {
+            return Err(CheatError::InvalidArgument("scan values must match the declared data width".into()));
+        }
         let p1 = val1.map_or(ptr::null(), |b| b.as_ptr() as *const _);
         let p2 = val2.map_or(ptr::null(), |b| b.as_ptr() as *const _);
-        let size = val1.map_or(data_type.byte_size(), |b| b.len());
 
         let status = unsafe {
             sys::cheat_scanner_first_scan(
@@ -342,6 +352,7 @@ impl MemoryScanner {
                 status
             )));
         }
+        self.data_size = size;
         Ok(())
     }
 
@@ -354,9 +365,14 @@ impl MemoryScanner {
         if self.raw.is_null() {
             return Err(CheatError::NotConnected);
         }
+        if self.data_size == 0 ||
+            val1.is_some_and(|v| v.len() != self.data_size) ||
+            val2.is_some_and(|v| v.len() != self.data_size) {
+            return Err(CheatError::InvalidArgument("next scan value length must match first scan".into()));
+        }
         let p1 = val1.map_or(ptr::null(), |b| b.as_ptr() as *const _);
         let p2 = val2.map_or(ptr::null(), |b| b.as_ptr() as *const _);
-        let size = val1.map_or(0, |b| b.len());
+        let size = self.data_size;
 
         let status = unsafe {
             sys::cheat_scanner_next_scan(

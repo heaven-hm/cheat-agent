@@ -9,6 +9,7 @@ namespace cheat_agent {
 namespace {
 
 constexpr size_t kChunkSize = 64 * 1024; // 64 KiB chunks
+constexpr size_t kMaxPatternWidth = 4 * 1024; // bounded overlap and progress
 
 template <typename T>
 bool compare_typed(const uint8_t* curr_ptr, const uint8_t* prev_ptr, int32_t mode, const void* v1, const void* v2) {
@@ -154,6 +155,21 @@ int32_t MemoryScanner::first_scan(
             return CHEAT_STATUS_INVALID_ARGUMENT;
     }
 
+    // The C ABI supplies one declared width for both value pointers.
+    // Fail closed before any typed memcpy or byte-array memcmp.
+    if (data_size_ == 0 || data_size_ > kMaxPatternWidth)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if ((val1 || val2) && val_size != data_size_)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode == CHEAT_SCAN_MODE_RANGE && (!val1 || !val2))
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode == CHEAT_SCAN_MODE_EXACT && !val1)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode != CHEAT_SCAN_MODE_EXACT &&
+        scan_mode != CHEAT_SCAN_MODE_UNKNOWN_INITIAL &&
+        scan_mode != CHEAT_SCAN_MODE_RANGE)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+
     auto regions = backend_->query_regions();
     std::vector<uint8_t> chunk(kChunkSize);
 
@@ -164,9 +180,11 @@ int32_t MemoryScanner::first_scan(
         if (!reg.is_readable || reg.size == 0) continue;
 
         uint64_t current_addr = reg.base_address;
+        if (reg.size > UINT64_MAX - reg.base_address) continue;
         uint64_t end_addr = reg.base_address + reg.size;
+        if (reg.size < data_size_) continue;
 
-        while (current_addr + data_size_ <= end_addr) {
+        while (current_addr <= end_addr - data_size_) {
             size_t bytes_to_read = static_cast<size_t>(std::min<uint64_t>(kChunkSize, end_addr - current_addr));
             size_t bytes_read = 0;
 
@@ -191,7 +209,10 @@ int32_t MemoryScanner::first_scan(
                 }
             }
 
-            current_addr += bytes_read;
+            // Move to the next aligned start address, retaining enough
+            // overlap to discover values spanning adjacent scan chunks.
+            const size_t advance = ((bytes_read - data_size_) / step + 1) * step;
+            current_addr += advance;
         }
     }
 
@@ -202,11 +223,20 @@ int32_t MemoryScanner::next_scan(
     int32_t scan_mode,
     const void* val1,
     const void* val2,
-    size_t /*val_size*/) {
+    size_t val_size) {
 
     if (!backend_ || !backend_->is_alive()) {
         return CHEAT_STATUS_NOT_CONNECTED;
     }
+
+    if ((val1 || val2) && val_size != data_size_)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode == CHEAT_SCAN_MODE_EXACT && !val1)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode == CHEAT_SCAN_MODE_RANGE && (!val1 || !val2))
+        return CHEAT_STATUS_INVALID_ARGUMENT;
+    if (scan_mode < CHEAT_SCAN_MODE_EXACT || scan_mode > CHEAT_SCAN_MODE_RANGE)
+        return CHEAT_STATUS_INVALID_ARGUMENT;
 
     if (candidates_.empty()) {
         return CHEAT_STATUS_OK;
@@ -242,7 +272,7 @@ int32_t MemoryScanner::scan_aob(const std::string& pattern_str) {
     data_type_ = CHEAT_DATA_TYPE_AOB;
 
     auto parsed_pattern = PatternScanner::parse_pattern(pattern_str);
-    if (parsed_pattern.empty()) {
+    if (parsed_pattern.empty() || parsed_pattern.size() > kMaxPatternWidth) {
         return CHEAT_STATUS_INVALID_ARGUMENT;
     }
     data_size_ = parsed_pattern.size();
@@ -254,9 +284,10 @@ int32_t MemoryScanner::scan_aob(const std::string& pattern_str) {
         if (!reg.is_readable || reg.size < data_size_) continue;
 
         uint64_t current_addr = reg.base_address;
+        if (reg.size > UINT64_MAX - reg.base_address) continue;
         uint64_t end_addr = reg.base_address + reg.size;
 
-        while (current_addr + data_size_ <= end_addr) {
+        while (current_addr <= end_addr - data_size_) {
             size_t bytes_to_read = static_cast<size_t>(std::min<uint64_t>(kChunkSize, end_addr - current_addr));
             size_t bytes_read = 0;
 

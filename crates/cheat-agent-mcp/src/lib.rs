@@ -172,7 +172,6 @@ impl McpServer {
             }
             "memory_scan_exact" => {
                 let type_str = arguments["type"].as_str().unwrap_or("uint32");
-                let val_num = arguments["value"].as_f64().unwrap_or(0.0);
                 let is_first = arguments["is_first_scan"].as_bool().unwrap_or(true);
 
                 let data_type = match type_str {
@@ -182,10 +181,57 @@ impl McpServer {
                     "uint64" => DataType::Uint64,
                     "float" => DataType::Float,
                     "double" => DataType::Double,
-                    _ => DataType::Uint32,
+                    _ => return Err(CheatError::InvalidArgument("unsupported scan type".into())),
                 };
 
-                let val_bytes = (val_num as u32).to_ne_bytes();
+                // Integer values must come from JSON integers to avoid losing
+                // uint64 precision in the f64 conversion.
+                let unsigned = || {
+                    // JSON Schema allows a number; accept 42.0 / 1e3 when
+                    // they are finite, integral and exactly representable.
+                    // Native JSON integers retain full uint64 precision.
+                    arguments["value"].as_u64().or_else(|| {
+                        let n = arguments["value"].as_f64()?;
+                        if n.is_finite() && n >= 0.0 && n.fract() == 0.0
+                            && n <= (1u64 << 53) as f64 {
+                            Some(n as u64)
+                        } else {
+                            None
+                        }
+                    }).ok_or_else(|| {
+                        CheatError::InvalidArgument(
+                            "unsigned scan value must be a nonnegative exact integer".into())
+                    })
+                };
+                let val_bytes: Vec<u8> = match data_type {
+                    DataType::Uint8 => u8::try_from(unsigned()?)
+                        .map_err(|_| CheatError::InvalidArgument("uint8 value out of range".into()))?
+                        .to_ne_bytes().to_vec(),
+                    DataType::Uint16 => u16::try_from(unsigned()?)
+                        .map_err(|_| CheatError::InvalidArgument("uint16 value out of range".into()))?
+                        .to_ne_bytes().to_vec(),
+                    DataType::Uint32 => u32::try_from(unsigned()?)
+                        .map_err(|_| CheatError::InvalidArgument("uint32 value out of range".into()))?
+                        .to_ne_bytes().to_vec(),
+                    DataType::Uint64 => unsigned()?.to_ne_bytes().to_vec(),
+                    DataType::Float | DataType::Double => {
+                        let number = arguments["value"].as_f64().ok_or_else(|| {
+                            CheatError::InvalidArgument("floating scan value must be numeric".into())
+                        })?;
+                        if !number.is_finite() {
+                            return Err(CheatError::InvalidArgument("floating scan value must be finite".into()));
+                        }
+                        if data_type == DataType::Float {
+                            if number.abs() > f32::MAX as f64 {
+                                return Err(CheatError::InvalidArgument("float value out of range".into()));
+                            }
+                            (number as f32).to_ne_bytes().to_vec()
+                        } else {
+                            number.to_ne_bytes().to_vec()
+                        }
+                    }
+                    _ => unreachable!(),
+                };
 
                 let mut guard = self.scanner.lock().unwrap();
                 let scanner = guard.as_mut().ok_or(CheatError::NotConnected)?;

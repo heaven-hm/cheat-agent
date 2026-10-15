@@ -7,7 +7,7 @@ namespace {
 class MockProcessBackend final : public cheat_agent::IProcessBackend {
 public:
     MockProcessBackend() {
-        memory_.resize(0x10000, 0); // 64 KiB memory
+        memory_.resize(0x20000, 0); // 128 KiB, allowing boundary-spanning test values
     }
 
     [[nodiscard]] bool is_alive() const noexcept override { return true; }
@@ -31,7 +31,7 @@ public:
 
     std::vector<cheat_agent::MemoryRegion> query_regions() override {
         return {
-            {0x0000, 0x10000, CHEAT_PROTECT_READ | CHEAT_PROTECT_WRITE, true, true, false}
+            {0x0000, 0x20000, CHEAT_PROTECT_READ | CHEAT_PROTECT_WRITE, true, true, false}
         };
     }
 
@@ -81,4 +81,75 @@ TEST_CASE(memory_scanner_exact_and_decreased_refinement) {
         REQUIRE(c.address != 0x3040); // 0x3040 stayed 100, so it must not match decreased
     }
     REQUIRE(found_ammo);
+}
+
+
+TEST_CASE(memory_scanner_rejects_incorrect_value_width) {
+    auto backend = std::make_shared<MockProcessBackend>();
+    cheat_agent::MemoryScanner scanner(backend);
+    uint8_t one_byte = 42;
+    uint32_t four_bytes = 42;
+
+    // Must reject the size mismatch before touching the pointer.
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_UINT32,
+        CHEAT_SCAN_MODE_EXACT, &one_byte, nullptr, 1),
+        CHEAT_STATUS_INVALID_ARGUMENT);
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_UINT32,
+        CHEAT_SCAN_MODE_EXACT, nullptr, nullptr, 4),
+        CHEAT_STATUS_INVALID_ARGUMENT);
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_UINT32,
+        CHEAT_SCAN_MODE_RANGE, &four_bytes, nullptr, 4),
+        CHEAT_STATUS_INVALID_ARGUMENT);
+
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_UINT32,
+        CHEAT_SCAN_MODE_EXACT, &four_bytes, nullptr, 4), CHEAT_STATUS_OK);
+    REQUIRE_EQ(scanner.next_scan(CHEAT_SCAN_MODE_EXACT,
+        &one_byte, nullptr, 1), CHEAT_STATUS_INVALID_ARGUMENT);
+    REQUIRE_EQ(scanner.next_scan(CHEAT_SCAN_MODE_RANGE,
+        &four_bytes, nullptr, 4), CHEAT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_CASE(memory_scanner_finds_typed_value_across_chunk_boundary) {
+    auto backend = std::make_shared<MockProcessBackend>();
+    cheat_agent::MemoryScanner scanner(backend);
+    const uint64_t special = 0xCAFE12345678BEEFULL;
+    size_t written = 0;
+    REQUIRE_EQ(backend->write_memory(0xFFFC, &special, sizeof(special), written), CHEAT_STATUS_OK);
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_UINT64, CHEAT_SCAN_MODE_EXACT,
+                                  &special, nullptr, sizeof(special)), CHEAT_STATUS_OK);
+    bool found = false;
+    for (const auto& match : scanner.get_candidates()) {
+        if (match.address == 0xFFFC) found = true;
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE(memory_scanner_finds_aob_across_chunk_boundary) {
+    auto backend = std::make_shared<MockProcessBackend>();
+    cheat_agent::MemoryScanner scanner(backend);
+    const uint8_t pattern[] = {0xDE, 0xAD, 0xBE, 0xEF};
+    size_t written = 0;
+    REQUIRE_EQ(backend->write_memory(0xFFFE, pattern, sizeof(pattern), written), CHEAT_STATUS_OK);
+    REQUIRE_EQ(scanner.scan_aob("DE AD BE EF"), CHEAT_STATUS_OK);
+    bool found = false;
+    for (const auto& match : scanner.get_candidates()) {
+        if (match.address == 0xFFFE) found = true;
+    }
+    REQUIRE(found);
+}
+
+
+TEST_CASE(memory_scanner_rejects_oversized_patterns) {
+    auto backend = std::make_shared<MockProcessBackend>();
+    cheat_agent::MemoryScanner scanner(backend);
+    std::vector<uint8_t> bytes(4097, 0xAA);
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_BYTE_ARRAY,
+        CHEAT_SCAN_MODE_EXACT, bytes.data(), nullptr, bytes.size()),
+        CHEAT_STATUS_INVALID_ARGUMENT);
+    std::string pattern;
+    for (size_t i = 0; i < bytes.size(); ++i) {
+        if (!pattern.empty()) pattern += ' ';
+        pattern += "AA";
+    }
+    REQUIRE_EQ(scanner.scan_aob(pattern), CHEAT_STATUS_INVALID_ARGUMENT);
 }
