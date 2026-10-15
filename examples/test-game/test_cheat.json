@@ -18,11 +18,11 @@
   },
   "verification": {
     "status": "restart_verified",
-    "restart_count": 1,
+    "restart_count": 2,
     "evidence": [
-      "Launch 1: started target game PID 84695",
-      "Launch 1: terminated PID 84695",
-      "Launch 2 (Restart): started target game PID 84696",
+      "Launch 1: started target game PID 85584",
+      "Launch 1: terminated PID 85584",
+      "Launch 2 (Restart): started target game PID 85585",
       "Restart verification passed: process identity resolved cleanly"
     ]
   }

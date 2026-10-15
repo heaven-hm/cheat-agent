@@ -33,12 +33,13 @@ impl TrainerGenerator {
     uint64_t base_offset = {base_off};
     int64_t offsets[] = {{ {offsets_str} }};
     size_t offset_count = sizeof(offsets) / sizeof(offsets[0]);
-    (void)target_module; (void)base_offset; (void)offset_count;
+    (void)target_module;
+    uint64_t target_addr = base_offset;
 "#
             )
         } else {
             let addr = def.resolution.static_address.as_deref().unwrap_or("0x0");
-            format!("    uint64_t target_addr = {addr};\n")
+            format!("    uint64_t target_addr = {addr};\n    const size_t offset_count = 0;\n")
         };
 
         let interval = def.value.freeze_interval_ms;
@@ -56,12 +57,20 @@ impl TrainerGenerator {
 #include <atomic>
 #include <csignal>
 #include <cstdint>
+#include <cstring>
 
 #if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
-#else
+#elif defined(__APPLE__)
 #include <unistd.h>
-#include <sys/types.h>
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#include <sys/uio.h>
 #endif
 
 namespace {{
@@ -70,11 +79,36 @@ std::atomic<bool> g_running{{true}};
 void signal_handler(int) {{
     g_running.store(false);
 }}
+
+bool write_process_memory_bytes(uint32_t pid, uint64_t address, const void* data, size_t size) {{
+#if defined(_WIN32)
+    HANDLE hProcess = OpenProcess(PROCESS_VM_WRITE | PROCESS_VM_OPERATION, FALSE, pid);
+    if (!hProcess) return false;
+    SIZE_T bytes_written = 0;
+    BOOL ok = WriteProcessMemory(hProcess, reinterpret_cast<LPVOID>(address), data, size, &bytes_written);
+    CloseHandle(hProcess);
+    return ok && (bytes_written == size);
+#elif defined(__APPLE__)
+    mach_port_t task = MACH_PORT_NULL;
+    if (task_for_pid(mach_task_self(), pid, &task) != KERN_SUCCESS) return false;
+    kern_return_t kr = mach_vm_write(task, address, reinterpret_cast<vm_offset_t>(data), static_cast<mach_msg_type_number_t>(size));
+    return kr == KERN_SUCCESS;
+#elif defined(__linux__)
+    struct iovec local{{ const_cast<void*>(data), size }};
+    struct iovec remote{{ reinterpret_cast<void*>(address), size }};
+    ssize_t written = process_vm_writev(pid, &local, 1, &remote, 1, 0);
+    return written == static_cast<ssize_t>(size);
+#else
+    (void)pid; (void)address; (void)data; (void)size;
+    return false;
+#endif
+}}
 }} // namespace
 
 int main(int argc, char** argv) {{
     std::signal(SIGINT, signal_handler);
     std::cout << "[+] Cheat Agent Standalone Trainer: {cheat_name}" << std::endl;
+    std::cout << "[+] Target: {target_name} ({arch})" << std::endl;
     std::cout << "[+] Press Ctrl+C to stop trainer and restore memory." << std::endl;
 
     uint32_t pid = 0;
@@ -87,12 +121,10 @@ int main(int argc, char** argv) {{
 
 {resolution_logic}
     {c_type} desired_value = static_cast<{c_type}>({desired_val});
-    (void)pid; (void)desired_value;
-
-    std::cout << "[+] Trainer active. Enforcing {val_type} = " << desired_value << std::endl;
+    std::cout << "[+] Trainer active for PID " << pid << ". Enforcing {val_type} = " << desired_value << std::endl;
 
     while (g_running.load()) {{
-        // Periodic freeze tick
+        write_process_memory_bytes(pid, target_addr, &desired_value, sizeof(desired_value));
         std::this_thread::sleep_for(std::chrono::milliseconds({interval}));
     }}
 
