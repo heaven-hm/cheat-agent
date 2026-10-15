@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -73,6 +74,11 @@ bool apply_patch(gtlibcpp::MemorySession& session, Patch& patch) {
     if (!result || result.value() != patch.replacement.size()) {
         std::cerr << "[!] " << patch.name
                   << " write denied/failed (target page may not be writable).\n";
+        // A failing write can still be partial; make a best-effort rollback.
+        auto undo = session.write_bytes(patch.address, patch.expected);
+        auto verify = session.read_bytes(patch.address, patch.expected.size());
+        if (!undo || !verify || verify.value() != patch.expected)
+            std::cerr << "[!] Rollback unverified: " << patch.name << '\n';
         return false;
     }
     auto check = session.read_bytes(patch.address, patch.replacement.size());
@@ -114,8 +120,11 @@ int main(int argc, char** argv) {
         const std::string arg = argv[i];
         if (arg == "--apply") apply = true;
         else if (arg == "--pid" && i + 1 < argc) {
-            try { pid = static_cast<DWORD>(std::stoul(argv[++i])); }
-            catch (...) { std::cerr << "Invalid PID\n"; return 2; }
+            try {
+                const auto parsed = std::stoull(argv[++i]);
+                if (parsed == 0 || parsed > 0xFFFFFFFFULL) throw std::out_of_range("PID");
+                pid = static_cast<DWORD>(parsed);
+            } catch (...) { std::cerr << "Invalid PID\n"; return 2; }
         } else {
             std::cerr << "Usage: igi_trainer [--pid PID] [--apply]\n";
             return 2;
