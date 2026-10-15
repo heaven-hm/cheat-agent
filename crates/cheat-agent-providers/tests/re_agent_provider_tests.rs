@@ -35,9 +35,8 @@ async fn test_re_agent_provider_lifecycle_and_unattached_fails_closed() {
 async fn test_re_agent_provider_evidence_envelope_schema_conformance() {
     let provider = ReAgentProvider::new();
 
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let test_game_path = root.join("build/examples/test-game/cheat_agent_test_game");
-    let test_game_str = test_game_path.to_str().unwrap();
+    let self_exe = std::env::current_exe().expect("current test executable path");
+    let test_game_str = self_exe.to_str().expect("valid path string");
 
     let envelope = provider.verify_trainer("req_verify_1", test_game_str)
         .expect("verify_trainer should succeed");
