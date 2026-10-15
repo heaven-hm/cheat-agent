@@ -73,6 +73,16 @@ enum Commands {
     },
 }
 
+fn validate_scan_options(exact: Option<u32>, aob: Option<&str>, data_type: &str) -> Result<(), String> {
+    if exact.is_some() == aob.is_some() {
+        return Err("Specify exactly one of --exact or --aob".to_string());
+    }
+    if data_type != "uint32" {
+        return Err(format!("Unsupported scan data type: {data_type}; only uint32 is implemented"));
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -83,12 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             server.run_stdio()?;
         }
         Commands::Scan { pid, exact, aob, data_type } => {
-            if exact.is_some() == aob.is_some() {
-                return Err("Specify exactly one of --exact or --aob".into());
-            }
-            if data_type != "uint32" {
-                return Err(format!("Unsupported scan data type: {data_type}; only uint32 is implemented").into());
-            }
+            validate_scan_options(exact, aob.as_deref(), &data_type)?;
             println!("[+] Attaching to PID {}...", pid);
             let backend = ProcessBackend::new(pid)?;
             let mut scanner = MemoryScanner::new(&backend)?;
@@ -201,4 +206,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod scan_option_tests {
+    use super::validate_scan_options;
+
+    #[test]
+    fn exact_value_and_pattern_are_mutually_exclusive() {
+        assert!(validate_scan_options(None, None, "uint32").is_err());
+        assert!(validate_scan_options(Some(1), Some("01"), "uint32").is_err());
+        assert!(validate_scan_options(Some(0), None, "uint32").is_ok());
+        assert!(validate_scan_options(None, Some("??"), "uint32").is_ok());
+    }
+
+    #[test]
+    fn unsupported_types_do_not_silently_scan_as_uint32() {
+        assert!(validate_scan_options(Some(1), None, "float").is_err());
+    }
 }
