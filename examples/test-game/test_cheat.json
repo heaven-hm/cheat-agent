@@ -17,13 +17,8 @@
     "static_address": "0x1000"
   },
   "verification": {
-    "status": "restart_verified",
-    "restart_count": 2,
-    "evidence": [
-      "Launch 1: started target game PID 85584",
-      "Launch 1: terminated PID 85584",
-      "Launch 2 (Restart): started target game PID 85585",
-      "Restart verification passed: process identity resolved cleanly"
-    ]
+    "status": "unverified",
+    "restart_count": 0,
+    "evidence": []
   }
 }
