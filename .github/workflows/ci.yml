@@ -53,13 +53,22 @@ jobs:
             ./build/examples/test-game/cheat_agent_test_game --status
           fi
 
-      - name: Verify Standalone Verification & Trainer Generation
+      - name: Assert incomplete verification fails closed and trainer generation runs
         shell: bash
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
+            set +e
             cargo run -p cheat-agent-cli -- verify --cheat examples/test-game/test_cheat.json --target-command "./build/examples/test-game/Release/cheat_agent_test_game.exe --daemon"
+            status=$?
           else
+            set +e
             cargo run -p cheat-agent-cli -- verify --cheat examples/test-game/test_cheat.json --target-command "./build/examples/test-game/cheat_agent_test_game --daemon"
+            status=$?
+          fi
+          set -e
+          if [ "$status" -ne 2 ]; then
+            echo "Expected explicit UNVERIFIED exit status 2, got $status"
+            exit 1
           fi
           cargo run -p cheat-agent-cli -- generate --cheat examples/test-game/test_cheat.json --lang cpp
           cargo run -p cheat-agent-cli -- generate --cheat examples/test-game/test_cheat.json --lang rust
