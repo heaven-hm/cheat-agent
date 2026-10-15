@@ -131,6 +131,33 @@ cargo run -p cheat-agent-cli -- generate --cheat examples/test-game/test_cheat.j
 
 ---
 
+## Project IGI trainer — GTLibCpp integration (Windows)
+
+The [Project IGI example](examples/project-igi/igi_trainer.cpp) now uses
+`gtlibcpp::WindowsBackendOptions` and `gtlibcpp::MemorySession` for **all
+process-memory reads and writes**, instead of its own Win32/Mach/Linux R/W
+implementations. Windows Toolhelp remains limited to PID discovery, and
+`QueryFullProcessImageNameA` obtains the executable path for the backend.
+
+```powershell
+cmake -S . -B build -DCHEAT_AGENT_ENABLE_GTLIBCPP=ON -DCHEAT_AGENT_BUILD_IGI_EXAMPLE=ON
+cmake --build build --config Release --target igi_trainer
+.\build\Release\igi_trainer.exe --pid 1234        # read-only preflight
+.\build\Release\igi_trainer.exe --pid 1234 --apply  # explicit opt-in
+```
+
+The example validates the expected byte signatures at its **historical,
+version-specific** addresses before any change, checks the bytes after
+writing, and attempts restoration on Ctrl+C or failure. It does not change
+executable-page protections: some game builds will **reject code writes**, and
+that failure is reported rather than bypassed. It also cannot guarantee
+restoration if the game exits, the process crashes, or memory changes
+externally. The program verifies byte readback, **not gameplay effects**.
+
+Only run the write mode on a locally controlled, authorized offline game.
+The example does not automatically call the agent's approval policy; a host
+exposing this to third-party clients must enforce policy externally.
+
 ## Security & Ethics
 
 Cheat Agent is strictly built for **authorized offline single-player games, educational research, and QA game-balance testing**.

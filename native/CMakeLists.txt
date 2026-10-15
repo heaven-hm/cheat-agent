@@ -7,11 +7,35 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(CHEAT_AGENT_ENABLE_GTLIBCPP "Enable GTLibCpp backend integration" ON)
+
+if(CHEAT_AGENT_ENABLE_GTLIBCPP)
+    set(GTLIBCPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GTLIBCPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(GTLIBCPP_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+    set(GTLIBCPP_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
+
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../gtlibcpp/CMakeLists.txt")
+        message(STATUS "Integrating local GTLibCpp from ../../gtlibcpp")
+        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../gtlibcpp" "${CMAKE_CURRENT_BINARY_DIR}/gtlibcpp" EXCLUDE_FROM_ALL)
+    else()
+        message(STATUS "Fetching GTLibCpp from github.com/heaven-hm/gtlibcpp")
+        include(FetchContent)
+        FetchContent_Declare(
+            gtlibcpp
+            GIT_REPOSITORY https://github.com/heaven-hm/gtlibcpp.git
+            GIT_TAG master
+        )
+        FetchContent_MakeAvailable(gtlibcpp)
+    endif()
+endif()
+
 set(NATIVE_SOURCES
     src/pattern_scanner.cpp
     src/memory_scanner.cpp
     src/pointer_resolver.cpp
     src/ffi.cpp
+    src/gtlibcpp_adapter.cpp
 )
 
 if(APPLE)
@@ -28,6 +52,10 @@ target_include_directories(cheat_agent_native PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
+if(CHEAT_AGENT_ENABLE_GTLIBCPP)
+    target_link_libraries(cheat_agent_native PUBLIC gtlibcpp::core)
+endif()
+
 if(MSVC)
     target_compile_options(cheat_agent_native PRIVATE /W4 /permissive-)
 else()
@@ -40,6 +68,7 @@ add_executable(cheat_agent_native_tests
     tests/test_scanner.cpp
     tests/test_pattern.cpp
     tests/test_pointer.cpp
+    tests/test_gtlibcpp_adapter.cpp
 )
 target_link_libraries(cheat_agent_native_tests PRIVATE cheat_agent_native)
 add_test(NAME cheat_agent_native_tests COMMAND cheat_agent_native_tests)
