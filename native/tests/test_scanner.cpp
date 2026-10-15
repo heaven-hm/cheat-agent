@@ -82,3 +82,29 @@ TEST_CASE(memory_scanner_exact_and_decreased_refinement) {
     }
     REQUIRE(found_ammo);
 }
+
+
+TEST_CASE(memory_scanner_rejects_incorrect_value_width) {
+    auto backend = std::make_shared<MockProcessBackend>();
+    cheat_agent::MemoryScanner scanner(backend);
+    uint8_t one_byte = 42;
+    uint32_t four_bytes = 42;
+
+    // Must reject the size mismatch before touching the pointer.
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_UINT32,
+        CHEAT_SCAN_MODE_EXACT, &one_byte, nullptr, 1),
+        CHEAT_STATUS_INVALID_ARGUMENT);
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_UINT32,
+        CHEAT_SCAN_MODE_EXACT, nullptr, nullptr, 4),
+        CHEAT_STATUS_INVALID_ARGUMENT);
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_UINT32,
+        CHEAT_SCAN_MODE_RANGE, &four_bytes, nullptr, 4),
+        CHEAT_STATUS_INVALID_ARGUMENT);
+
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_UINT32,
+        CHEAT_SCAN_MODE_EXACT, &four_bytes, nullptr, 4), CHEAT_STATUS_OK);
+    REQUIRE_EQ(scanner.next_scan(CHEAT_SCAN_MODE_EXACT,
+        &one_byte, nullptr, 1), CHEAT_STATUS_INVALID_ARGUMENT);
+    REQUIRE_EQ(scanner.next_scan(CHEAT_SCAN_MODE_RANGE,
+        &four_bytes, nullptr, 4), CHEAT_STATUS_INVALID_ARGUMENT);
+}
