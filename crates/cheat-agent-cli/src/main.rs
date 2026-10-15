@@ -82,7 +82,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let server = McpServer::new();
             server.run_stdio()?;
         }
-        Commands::Scan { pid, exact, aob, data_type: _ } => {
+        Commands::Scan { pid, exact, aob, data_type } => {
+            if exact.is_some() == aob.is_some() {
+                return Err("Specify exactly one of --exact or --aob".into());
+            }
+            if data_type != "uint32" {
+                return Err(format!("Unsupported scan data type: {data_type}; only uint32 is implemented").into());
+            }
             println!("[+] Attaching to PID {}...", pid);
             let backend = ProcessBackend::new(pid)?;
             let mut scanner = MemoryScanner::new(&backend)?;
