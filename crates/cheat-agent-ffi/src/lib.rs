@@ -328,7 +328,7 @@ impl MemoryScanner {
             DataType::ByteArray | DataType::String => val1.or(val2).map_or(0, |v| v.len()),
             _ => data_type.byte_size(),
         };
-        if size == 0 || size > 64 * 1024 ||
+        if size == 0 || size > 4 * 1024 ||
             val1.is_some_and(|v| v.len() != size) ||
             val2.is_some_and(|v| v.len() != size) {
             return Err(CheatError::InvalidArgument("scan values must match the declared data width".into()));
