@@ -186,9 +186,23 @@ impl McpServer {
 
                 // Integer values must come from JSON integers to avoid losing
                 // uint64 precision in the f64 conversion.
-                let unsigned = || arguments["value"].as_u64().ok_or_else(|| {
-                    CheatError::InvalidArgument("unsigned scan value must be a JSON integer".into())
-                });
+                let unsigned = || {
+                    // JSON Schema allows a number; accept 42.0 / 1e3 when
+                    // they are finite, integral and exactly representable.
+                    // Native JSON integers retain full uint64 precision.
+                    arguments["value"].as_u64().or_else(|| {
+                        let n = arguments["value"].as_f64()?;
+                        if n.is_finite() && n >= 0.0 && n.fract() == 0.0
+                            && n <= (1u64 << 53) as f64 {
+                            Some(n as u64)
+                        } else {
+                            None
+                        }
+                    }).ok_or_else(|| {
+                        CheatError::InvalidArgument(
+                            "unsigned scan value must be a nonnegative exact integer".into())
+                    })
+                };
                 let val_bytes: Vec<u8> = match data_type {
                     DataType::Uint8 => u8::try_from(unsigned()?)
                         .map_err(|_| CheatError::InvalidArgument("uint8 value out of range".into()))?
