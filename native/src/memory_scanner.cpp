@@ -9,6 +9,7 @@ namespace cheat_agent {
 namespace {
 
 constexpr size_t kChunkSize = 64 * 1024; // 64 KiB chunks
+constexpr size_t kMaxPatternWidth = 4 * 1024; // bounded overlap and progress
 
 template <typename T>
 bool compare_typed(const uint8_t* curr_ptr, const uint8_t* prev_ptr, int32_t mode, const void* v1, const void* v2) {
@@ -156,7 +157,7 @@ int32_t MemoryScanner::first_scan(
 
     // The C ABI supplies one declared width for both value pointers.
     // Fail closed before any typed memcpy or byte-array memcmp.
-    if (data_size_ == 0 || data_size_ > kChunkSize)
+    if (data_size_ == 0 || data_size_ > kMaxPatternWidth)
         return CHEAT_STATUS_INVALID_ARGUMENT;
     if ((val1 || val2) && val_size != data_size_)
         return CHEAT_STATUS_INVALID_ARGUMENT;
@@ -271,7 +272,7 @@ int32_t MemoryScanner::scan_aob(const std::string& pattern_str) {
     data_type_ = CHEAT_DATA_TYPE_AOB;
 
     auto parsed_pattern = PatternScanner::parse_pattern(pattern_str);
-    if (parsed_pattern.empty() || parsed_pattern.size() > kChunkSize) {
+    if (parsed_pattern.empty() || parsed_pattern.size() > kMaxPatternWidth) {
         return CHEAT_STATUS_INVALID_ARGUMENT;
     }
     data_size_ = parsed_pattern.size();
