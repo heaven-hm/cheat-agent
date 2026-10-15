@@ -137,3 +137,19 @@ TEST_CASE(memory_scanner_finds_aob_across_chunk_boundary) {
     }
     REQUIRE(found);
 }
+
+
+TEST_CASE(memory_scanner_rejects_oversized_patterns) {
+    auto backend = std::make_shared<MockProcessBackend>();
+    cheat_agent::MemoryScanner scanner(backend);
+    std::vector<uint8_t> bytes(4097, 0xAA);
+    REQUIRE_EQ(scanner.first_scan(CHEAT_DATA_TYPE_BYTE_ARRAY,
+        CHEAT_SCAN_MODE_EXACT, bytes.data(), nullptr, bytes.size()),
+        CHEAT_STATUS_INVALID_ARGUMENT);
+    std::string pattern;
+    for (size_t i = 0; i < bytes.size(); ++i) {
+        if (!pattern.empty()) pattern += ' ';
+        pattern += "AA";
+    }
+    REQUIRE_EQ(scanner.scan_aob(pattern), CHEAT_STATUS_INVALID_ARGUMENT);
+}
