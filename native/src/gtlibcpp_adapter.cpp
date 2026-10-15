@@ -93,13 +93,28 @@ GtlibProcessBackendAdapter::GtlibProcessBackendAdapter(
     std::shared_ptr<gtlibcpp::MemorySession> session,
     bool require_policy_authorization)
     : session_(std::move(session)),
+      underlying_backend_(nullptr),
+      require_policy_authorization_(require_policy_authorization) {}
+
+GtlibProcessBackendAdapter::GtlibProcessBackendAdapter(
+    std::shared_ptr<gtlibcpp::MemorySession> session,
+    std::shared_ptr<IProcessBackend> underlying_backend,
+    bool require_policy_authorization)
+    : session_(std::move(session)),
+      underlying_backend_(std::move(underlying_backend)),
       require_policy_authorization_(require_policy_authorization) {}
 
 bool GtlibProcessBackendAdapter::is_alive() const noexcept {
+    if (underlying_backend_) {
+        return underlying_backend_->is_alive();
+    }
     return session_ && session_->backend() && session_->backend()->is_alive();
 }
 
 uint32_t GtlibProcessBackendAdapter::get_pid() const noexcept {
+    if (underlying_backend_) {
+        return underlying_backend_->get_pid();
+    }
     if (!session_ || !session_->backend()) return 0;
     return session_->backend()->identity().pid;
 }
@@ -193,10 +208,16 @@ int32_t GtlibProcessBackendAdapter::write_memory(
 }
 
 std::vector<MemoryRegion> GtlibProcessBackendAdapter::query_regions() {
+    if (underlying_backend_) {
+        return underlying_backend_->query_regions();
+    }
     return {};
 }
 
 std::vector<ModuleInfo> GtlibProcessBackendAdapter::query_modules() {
+    if (underlying_backend_) {
+        return underlying_backend_->query_modules();
+    }
     return {};
 }
 

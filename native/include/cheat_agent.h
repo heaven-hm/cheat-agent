@@ -84,6 +84,9 @@ int32_t cheat_backend_read_memory(CheatProcessBackend* backend, uint64_t address
 int32_t cheat_backend_write_memory(CheatProcessBackend* backend, uint64_t address, const void* buffer, size_t size, size_t* bytes_written);
 int32_t cheat_backend_query_regions(CheatProcessBackend* backend, CheatMemoryRegion* out_regions, size_t max_regions, size_t* count);
 int32_t cheat_backend_query_modules(CheatProcessBackend* backend, CheatModuleInfo* out_modules, size_t max_modules, size_t* count);
+int32_t cheat_backend_authorize_write(CheatProcessBackend* backend, int32_t authorized);
+int32_t cheat_backend_is_write_authorized(CheatProcessBackend* backend);
+int32_t cheat_backend_has_gtlibcpp(void);
 
 /* Memory Scanner APIs */
 int32_t cheat_scanner_create(CheatProcessBackend* backend, CheatMemoryScanner** out_scanner);

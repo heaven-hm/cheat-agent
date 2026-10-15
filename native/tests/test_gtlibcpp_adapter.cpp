@@ -35,8 +35,11 @@ public:
         return CHEAT_STATUS_OK;
     }
 
-    std::vector<cheat_agent::MemoryRegion> query_regions() override { return {}; }
-    std::vector<cheat_agent::ModuleInfo> query_modules() override { return {}; }
+    std::vector<cheat_agent::MemoryRegion> query_regions() override { return regions_; }
+    std::vector<cheat_agent::ModuleInfo> query_modules() override { return modules_; }
+
+    void add_region(cheat_agent::MemoryRegion r) { regions_.push_back(r); }
+    void add_module(cheat_agent::ModuleInfo m) { modules_.push_back(m); }
 
     void set_memory(uint64_t address, const std::vector<uint8_t>& bytes) {
         for (size_t i = 0; i < bytes.size(); ++i) {
@@ -48,6 +51,8 @@ private:
     uint32_t pid_{1337};
     bool alive_{true};
     std::map<uint64_t, uint8_t> memory_{};
+    std::vector<cheat_agent::MemoryRegion> regions_{};
+    std::vector<cheat_agent::ModuleInfo> modules_{};
 };
 
 } // namespace
@@ -178,4 +183,25 @@ TEST_CASE(gtlibcpp_architecture_aware_pointer_resolution) {
     auto res_unknown = proc_adapter.resolve_pointer_chain(0x3000, {0x0, 0x20}, gtlibcpp::Architecture::unknown);
     REQUIRE(!res_unknown.ok());
     REQUIRE(res_unknown.error().code == gtlibcpp::ErrorCode::invalid_type);
+}
+
+TEST_CASE(gtlibcpp_underlying_backend_delegation) {
+    auto mock = std::make_shared<MockProcessBackend>(4242);
+    mock->add_region({0x1000, 0x1000, 0x01, true, false, false});
+    mock->add_region({0x2000, 0x2000, 0x03, true, true, false});
+    mock->add_module({"test_game.exe", "/bin/test_game.exe", 0x1000, 0x1000});
+
+    auto mem_adapter = std::make_shared<cheat_agent::GtlibMemoryBackendAdapter>(mock);
+    auto session = std::make_shared<gtlibcpp::MemorySession>(mem_adapter);
+    cheat_agent::GtlibProcessBackendAdapter proc_adapter(session, mock);
+
+    REQUIRE(proc_adapter.is_alive());
+    REQUIRE_EQ(proc_adapter.get_pid(), 4242u);
+
+    auto regions = proc_adapter.query_regions();
+    REQUIRE_EQ(regions.size(), 2u);
+
+    auto modules = proc_adapter.query_modules();
+    REQUIRE_EQ(modules.size(), 1u);
+    REQUIRE_EQ(modules[0].name, std::string("test_game.exe"));
 }
