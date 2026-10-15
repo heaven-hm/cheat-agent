@@ -4,6 +4,9 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub mod re_agent;
+pub use re_agent::{EvidenceEnvelope, ReAgentProvider, TargetIdentity};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
