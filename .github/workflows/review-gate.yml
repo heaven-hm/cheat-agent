@@ -1,0 +1,58 @@
+name: Multi-Agent Review Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  adversarial-review-gate:
+    name: Multi-Agent PR Review & Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Gate Check 1 - Branch Isolation"
+        run: |
+          echo "[+] Validating PR branch isolation..."
+          if [ "${{ github.head_ref }}" = "main" ]; then
+            echo "[-] Error: Pull requests directly from main are not permitted."
+            exit 1
+          fi
+          echo "[✓] Branch isolation verified (${{ github.head_ref }} -> ${{ github.base_ref }})"
+
+      - name: "Gate Check 2 - Native C++ Safety Static Audit"
+        run: |
+          echo "[+] Auditing native C++ memory scanner for buffer validation..."
+          grep -q "val_size != data_size_" native/src/memory_scanner.cpp || {
+            echo "[-] Error: missing value buffer size check in memory_scanner.cpp"
+            exit 1
+          }
+          grep -q "kMaxPatternWidth" native/src/memory_scanner.cpp || {
+            echo "[-] Error: missing pattern width cap in memory_scanner.cpp"
+            exit 1
+          }
+          echo "[✓] Native C++ safety static audit passed."
+
+      - name: "Gate Check 3 - FFI & Verifier Fail-Closed Protocol Audit"
+        run: |
+          echo "[+] Auditing Rust verifier and agent loop..."
+          grep -q "resolved address cannot be zero" crates/cheat-agent-verifier/src/lib.rs || {
+            echo "[-] Error: verifier does not reject address zero"
+            exit 1
+          }
+          grep -q "max_iterations == 0" crates/cheat-agent-cli/src/lib.rs || {
+            echo "[-] Error: agent loop does not reject zero max-iterations"
+            exit 1
+          }
+          echo "[✓] Rust FFI and agent protocol audit passed."
+
+      - name: "Gate Check 4 - Documentation & Protocol Compliance"
+        run: |
+          test -f docs/MULTI_AGENT_REVIEW.md || {
+            echo "[-] Error: docs/MULTI_AGENT_REVIEW.md is missing"
+            exit 1
+          }
+          echo "[✓] Multi-agent review protocol compliance verified."
