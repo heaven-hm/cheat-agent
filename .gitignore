@@ -17,6 +17,7 @@ compile_commands.json
 *.dll
 *.exe
 *.pdb
+*_bin
 
 # Rust
 **/*.rs.bk

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "name": "Infinite Ammo",
+  "description": "Enforces 999 ammunition in test game across launches",
+  "target": {
+    "name": "cheat_agent_test_game",
+    "architecture": "arm64"
+  },
+  "value": {
+    "type": "uint32",
+    "desired": 999,
+    "freeze": true,
+    "freeze_interval_ms": 50
+  },
+  "resolution": {
+    "method": "static_address",
+    "static_address": "0x1000"
+  },
+  "verification": {
+    "status": "restart_verified",
+    "restart_count": 1,
+    "evidence": [
+      "Launch 1: started target game PID 84695",
+      "Launch 1: terminated PID 84695",
+      "Launch 2 (Restart): started target game PID 84696",
+      "Restart verification passed: process identity resolved cleanly"
+    ]
+  }
+}
