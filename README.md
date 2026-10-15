@@ -1,6 +1,6 @@
 # Cheat Agent
 
-> **Production-grade, cross-platform autonomous AI reverse-engineering agent and verified trainer generator.**  
+> **Experimental, cross-platform AI-assisted reverse-engineering and trainer-generation project.**  
 > Built with **C17**, **C++20**, and **Rust** (stable). Zero Python. Zero Java. Zero .NET. Zero Node.js.
 
 [![CI](https://github.com/heaven-hm/cheat-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/heaven-hm/cheat-agent/actions/workflows/ci.yml)
@@ -17,17 +17,17 @@ Unlike existing tools that are interactive desktop GUIs (Cheat Engine, x64dbg) o
 
 ### The Core Differentiator: Closed-Loop Verification
 
-Most game manipulation tools stop after an address is written to. In real games, memory addresses relocate upon relaunch due to ASLR and dynamic heap allocation. **Cheat Agent enforces a strict 5-stage verification loop:**
+Most game manipulation tools stop after an address is written to. In real games, memory addresses relocate upon relaunch due to ASLR and dynamic heap allocation. **Cheat Agent is working toward a strict 5-stage verification loop (not fully implemented yet):**
 
 ```text
 DISCOVER THE CHEAT → VERIFY THE CHEAT → GENERATE THE TRAINER → RESTART THE GAME → PROVE IT STILL WORKS.
 ```
 
-1. **`MEMORY_WRITE_VERIFIED`**: Validates the memory cell updates without OS faults.
-2. **`GAME_BEHAVIOR_VERIFIED`**: Confirms in-game behavior responds to the modification (e.g. ammo decrement prevented).
-3. **`RESTART_VERIFIED`**: Game process is terminated and restarted; pointer chains or AoB signatures resolve to new addresses.
+1. **`MEMORY_WRITE_VERIFIED`**: Intended to validate the memory cell update (not implemented in the current verifier).
+2. **`GAME_BEHAVIOR_VERIFIED`**: Intended to confirm in-game behavior (not implemented in the current verifier).
+3. **`RESTART_VERIFIED`**: Intended to verify pointer/signature recovery, not just process relaunch (not implemented in the current verifier).
 4. **`TRAINER_BUILD_VERIFIED`**: Standalone C++20 and Rust trainer sources compile with zero errors using native toolchains.
-5. **`TRAINER_EXECUTION_VERIFIED`**: The compiled trainer attaches to the restarted process and restores/enforces target state.
+5. **`TRAINER_EXECUTION_VERIFIED`**: Intended to validate generated trainer execution (not implemented in the current verifier).
 
 ---
 
@@ -48,7 +48,7 @@ Operates directly inside **OpenAI Codex**, **Claude Code**, or other MCP-compati
 ```
 
 ### Mode B: Standalone AI Agent
-Runs independently as a native binary using direct model APIs or local model servers:
+Provides experimental single-turn planning using direct model APIs or local model servers. Full autonomous tool dispatch is not implemented (see issue #2):
 - **OpenAI API** (`gpt-4o`, `o1`, `gpt-4-turbo`)
 - **Anthropic API** (`claude-3-5-sonnet`)
 - **OpenRouter** (DeepSeek, Llama 3.3, Mistral)
@@ -116,7 +116,7 @@ cargo build
 cargo test
 ```
 
-### End-to-End Verification Demo
+### Experimental Process Restart Demo (not full cheat verification)
 ```bash
 # Launch autonomous restart verification against the native test game
 cargo run -p cheat-agent-cli -- verify \
