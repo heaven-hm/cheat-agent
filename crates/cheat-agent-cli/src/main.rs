@@ -113,7 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("[+] Verifying cheat '{}' against '{}'...", def.name, target_command);
             let report = VerificationEngine::verify_with_restart(&mut def, &target_command)?;
 
-            println!("[+] Verification Outcome: {}", report.overall_status);
+            println!("[+] Verification Outcome: {} (unproven stages are not passed)", report.overall_status);
             println!("    Memory Write:        {}", if report.stages.memory_write { "PASSED" } else { "FAILED" });
             println!("    Game Behavior:       {}", if report.stages.game_behavior { "PASSED" } else { "FAILED" });
             println!("    Restart Persistence: {}", if report.stages.restart_persistence { "PASSED" } else { "FAILED" });
@@ -180,7 +180,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
             ];
 
-            println!("[+] Agent reasoning loop initiated (max iterations: {})...", max_iterations);
+            println!("[+] Single-turn model planning mode (requested max iterations: {}; multi-turn tool execution not implemented)...", max_iterations);
             match provider_box.chat_complete(&model, &messages, &tools_vec).await {
                 Ok(resp) => {
                     if let Some(text) = resp.content {
@@ -194,8 +194,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 Err(e) => {
-                    println!("[!] Provider request info: {}", e);
-                    println!("[*] Standalone execution structure verified.");
+                    eprintln!("[!] Provider request failed: {}", e);
+                    return Err(Box::<dyn std::error::Error>::from(e));
                 }
             }
         }
