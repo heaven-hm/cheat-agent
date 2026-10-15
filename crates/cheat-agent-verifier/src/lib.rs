@@ -30,27 +30,37 @@ impl VerificationEngine {
 
         report.evidence_log.push(format!("Attached to target PID: {}", target_pid));
 
-        // 1. Resolve Address
+        // 1. Resolve address, rejecting malformed or missing configuration.
+        // Never silently treat a malformed address as 0.
         let resolved_addr = if def.resolution.method == "module_pointer_chain" {
+            let module = def.resolution.module.as_ref()
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| CheatError::InvalidArgument("missing pointer-chain module".to_string()))?;
+            let base_text = def.resolution.base_offset.as_deref()
+                .ok_or_else(|| CheatError::InvalidArgument("missing pointer-chain base offset".to_string()))?;
+            let offsets = def.resolution.offsets.as_ref()
+                .ok_or_else(|| CheatError::InvalidArgument("missing pointer-chain offsets".to_string()))?;
+            let parsed_offsets = offsets.iter()
+                .map(|s| parse_hex_offset(s))
+                .collect::<Result<Vec<_>>>()?;
             let chain = cheat_agent_core::PointerChain {
-                base_module: def.resolution.module.clone().unwrap_or_default(),
-                base_offset: u64::from_str_radix(
-                    def.resolution.base_offset.as_deref().unwrap_or("0").trim_start_matches("0x"),
-                    16,
-                ).unwrap_or(0),
-                offsets: def.resolution.offsets.as_ref().map_or(vec![], |offs| {
-                    offs.iter()
-                        .map(|s| i64::from_str_radix(s.trim_start_matches("0x"), 16).unwrap_or(0))
-                        .collect()
-                }),
+                base_module: module.clone(),
+                base_offset: parse_hex_address(base_text)?,
+                offsets: parsed_offsets,
             };
             backend.resolve_pointer(&chain)?
+        } else if def.resolution.method == "static_address" {
+            let address = def.resolution.static_address.as_deref()
+                .ok_or_else(|| CheatError::InvalidArgument("missing static address".to_string()))?;
+            parse_hex_address(address)?
         } else {
-            u64::from_str_radix(
-                def.resolution.static_address.as_deref().unwrap_or("0").trim_start_matches("0x"),
-                16,
-            ).unwrap_or(0)
+            return Err(CheatError::InvalidArgument(format!(
+                "unsupported resolution method: {}", def.resolution.method
+            )));
         };
+        if resolved_addr == 0 {
+            return Err(CheatError::InvalidArgument("resolved address cannot be zero".to_string()));
+        }
 
         report.evidence_log.push(format!("Resolved target address: 0x{:X}", resolved_addr));
 
@@ -178,4 +188,51 @@ fn spawn_process(cmd: &str) -> Result<Child> {
         command.args(&parts[1..]);
     }
     command.spawn().map_err(|e| CheatError::Internal(format!("Failed to spawn {}: {}", cmd, e)))
+}
+
+fn parse_hex_address(value: &str) -> Result<u64> {
+    let digits = value.strip_prefix("0x").or_else(|| value.strip_prefix("0X")).unwrap_or(value);
+    if digits.is_empty() {
+        return Err(CheatError::InvalidArgument("empty hex address".to_string()));
+    }
+    u64::from_str_radix(digits, 16).map_err(|_| CheatError::InvalidArgument(format!("invalid hex address: {}", value)))
+}
+
+fn parse_hex_offset(value: &str) -> Result<i64> {
+    let negative = value.starts_with('-');
+    let trimmed = if negative { &value[1..] } else { value };
+    let digits = trimmed.strip_prefix("0x").or_else(|| trimmed.strip_prefix("0X")).unwrap_or(trimmed);
+    if digits.is_empty() {
+        return Err(CheatError::InvalidArgument("empty pointer offset".to_string()));
+    }
+    let parsed = i64::from_str_radix(digits, 16)
+        .map_err(|_| CheatError::InvalidArgument(format!("invalid pointer offset: {}", value)))?;
+    if negative { Ok(-parsed) } else { Ok(parsed) }
+}
+
+#[cfg(test)]
+mod address_parse_tests {
+    use super::*;
+
+    #[test]
+    fn parses_valid_hex_addresses() {
+        assert_eq!(parse_hex_address("0x1234").unwrap(), 0x1234);
+        assert_eq!(parse_hex_address("0XFF").unwrap(), 255);
+    }
+
+    #[test]
+    fn rejects_invalid_or_empty_hex() {
+        assert!(parse_hex_address("0x").is_err());
+        assert!(parse_hex_address("0xZZ").is_err());
+        assert!(parse_hex_address("xyz").is_err());
+        assert!(parse_hex_address("10000000000000000").is_err());
+    }
+
+    #[test]
+    fn offsets_do_not_fall_back_to_zero() {
+        assert_eq!(parse_hex_offset("-0x10").unwrap(), -16);
+        assert_eq!(parse_hex_offset("0x20").unwrap(), 32);
+        assert!(parse_hex_offset("bad-offset").is_err());
+        assert!(parse_hex_offset("-0x").is_err());
+    }
 }
