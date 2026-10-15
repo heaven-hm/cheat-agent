@@ -89,6 +89,7 @@ impl VerificationEngine {
 
         report.evidence_log.push("Behavior and trainer execution were not tested; verification remains incomplete".to_string());
         def.verification.status = "unverified".to_string();
+        def.verification.restart_count = 0;
         def.verification.evidence = report.evidence_log.clone();
 
         Ok(report)
@@ -114,8 +115,17 @@ impl VerificationEngine {
         report.evidence_log.push(format!("Launch 1: started target game PID {}", pid1));
         thread::sleep(Duration::from_millis(100));
 
-        let backend1 = ProcessBackend::new(pid1)?;
+        let backend1 = match ProcessBackend::new(pid1) {
+            Ok(backend) => backend,
+            Err(error) => {
+                let _ = child1.kill();
+                let _ = child1.wait();
+                return Err(error);
+            }
+        };
         if !backend1.is_alive() {
+            let _ = child1.kill();
+            let _ = child1.wait();
             return Err(CheatError::NotConnected);
         }
         report.evidence_log.push("Process was alive; no memory write or game behavior was validated".to_string());
@@ -133,7 +143,14 @@ impl VerificationEngine {
         report.evidence_log.push(format!("Launch 2 (Restart): started target game PID {}", pid2));
         thread::sleep(Duration::from_millis(100));
 
-        let backend2 = ProcessBackend::new(pid2)?;
+        let backend2 = match ProcessBackend::new(pid2) {
+            Ok(backend) => backend,
+            Err(error) => {
+                let _ = child2.kill();
+                let _ = child2.wait();
+                return Err(error);
+            }
+        };
         if backend2.is_alive() {
             report.evidence_log.push("Process restarted, but cheat address persistence and trainer behavior remain unverified".to_string());
         }
@@ -144,6 +161,7 @@ impl VerificationEngine {
         report.evidence_log.push("No cheat write, trainer compilation, or trainer execution was performed in restart test".to_string());
 
         def.verification.status = "unverified".to_string();
+        def.verification.restart_count = 0;
         def.verification.evidence = report.evidence_log.clone();
 
         Ok(report)
