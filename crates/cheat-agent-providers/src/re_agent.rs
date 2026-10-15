@@ -367,10 +367,18 @@ impl ReAgentProvider {
         }
 
         backend.authorize_write(true)?;
-        let written = backend.write_memory(address, new_bytes)?;
-        backend.authorize_write(false)?; // revoke authorization immediately after commit
-
+        // Always revoke elevated write permissions, including failed/partial writes.
+        let write_result = backend.write_memory(address, new_bytes);
+        let revoke_result = backend.authorize_write(false);
+        revoke_result?;
+        let written = write_result?;
+        if written != new_bytes.len() {
+            return Err(CheatError::InvalidArgument("partial memory write; success cannot be claimed".into()));
+        }
         let post_bytes = backend.read_memory(address, new_bytes.len())?;
+        if post_bytes != new_bytes {
+            return Err(CheatError::InvalidArgument("memory readback mismatch after write".into()));
+        }
 
         Ok(EvidenceEnvelope {
             request_id: request_id.to_string(),
