@@ -472,3 +472,38 @@ impl McpServer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod memory_read_validation_tests {
+    use super::*;
+
+    #[test]
+    fn malformed_memory_read_requests_fail_before_attachment() {
+        let server = McpServer::new();
+        for args in [
+            json!({"address":"0x1000"}),
+            json!({"size":4}),
+            json!({"address":"0x", "size":4}),
+            json!({"address":"0x0", "size":4}),
+            json!({"address":"0x1000", "size":0}),
+            json!({"address":"0x1000", "size":65537}),
+            json!({"address":"0xFFFFFFFFFFFFFFFF", "size":2}),
+            json!({"address":"0x1000", "size":-1}),
+            json!({"address":"0xZZ", "size":4}),
+        ] {
+            assert!(
+                matches!(server.handle_tool_call("memory_read", &args), Err(CheatError::InvalidArgument(_))),
+                "expected invalid argument for {args}"
+            );
+        }
+    }
+
+    #[test]
+    fn valid_unattached_memory_read_reports_not_connected() {
+        let server = McpServer::new();
+        assert!(matches!(
+            server.handle_tool_call("memory_read", &json!({"address":"0x1000", "size":4})),
+            Err(CheatError::NotConnected)
+        ));
+    }
+}
