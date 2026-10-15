@@ -132,7 +132,14 @@ int main(int argc, char** argv) {
     std::string line;
     print_status_json();
 
-    while (g_running && std::getline(std::cin, line)) {
+    while (g_running) {
+        if (!std::getline(std::cin, line)) {
+            // CI and detached launches may provide closed stdin. Keep the
+            // controlled test process alive until its parent terminates it.
+            std::cin.clear();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
         if (line == "status") {
             print_status_json();
         } else if (line == "fire") {
