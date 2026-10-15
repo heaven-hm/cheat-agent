@@ -57,7 +57,7 @@ impl VerificationEngine {
         // 2. Read and Verify Memory
         let initial_bytes = backend.read_memory(resolved_addr, 4)?;
         report.evidence_log.push(format!("Original memory bytes: {:02X?}", initial_bytes));
-        report.stages.memory_write = true;
+        report.evidence_log.push("Read-only observation: no target write was attempted or verified".to_string());
 
         // 3. Test Trainer Code Generation & Compilation
         let cpp_code = TrainerGenerator::generate_cpp(def)?;
@@ -87,9 +87,8 @@ impl VerificationEngine {
             report.evidence_log.push("clang++ compiler not detected in test environment".to_string());
         }
 
-        report.stages.game_behavior = true;
-        report.overall_status = "PASSED".to_string();
-        def.verification.status = "fully_verified".to_string();
+        report.evidence_log.push("Behavior and trainer execution were not tested; verification remains incomplete".to_string());
+        def.verification.status = "unverified".to_string();
         def.verification.evidence = report.evidence_log.clone();
 
         Ok(report)
@@ -116,7 +115,10 @@ impl VerificationEngine {
         thread::sleep(Duration::from_millis(100));
 
         let backend1 = ProcessBackend::new(pid1)?;
-        report.stages.memory_write = backend1.is_alive();
+        if !backend1.is_alive() {
+            return Err(CheatError::NotConnected);
+        }
+        report.evidence_log.push("Process was alive; no memory write or game behavior was validated".to_string());
 
         // Terminate run 1
         let _ = child1.kill();
@@ -133,20 +135,15 @@ impl VerificationEngine {
 
         let backend2 = ProcessBackend::new(pid2)?;
         if backend2.is_alive() {
-            report.stages.restart_persistence = true;
-            report.evidence_log.push("Restart verification passed: process identity resolved cleanly".to_string());
+            report.evidence_log.push("Process restarted, but cheat address persistence and trainer behavior remain unverified".to_string());
         }
 
         let _ = child2.kill();
         let _ = child2.wait();
 
-        report.stages.game_behavior = true;
-        report.stages.trainer_compilation = true;
-        report.stages.trainer_execution = true;
-        report.overall_status = "PASSED".to_string();
+        report.evidence_log.push("No cheat write, trainer compilation, or trainer execution was performed in restart test".to_string());
 
-        def.verification.status = "restart_verified".to_string();
-        def.verification.restart_count += 1;
+        def.verification.status = "unverified".to_string();
         def.verification.evidence = report.evidence_log.clone();
 
         Ok(report)
