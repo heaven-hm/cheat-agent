@@ -150,6 +150,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::Run { provider, model, goal, max_iterations } => {
+            if max_iterations == 0 {
+                return Err("max-iterations must be greater than zero".into());
+            }
             println!("[+] Starting Standalone AI Agent (Mode B)");
             println!("    Provider: {}", provider);
             println!("    Model:    {}", model);
@@ -191,10 +194,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("\n[Agent]:\n{}", text);
                     }
                     if !resp.tool_calls.is_empty() {
-                        println!("\n[Agent Tool Calls]: {} requested", resp.tool_calls.len());
-                        for call in resp.tool_calls {
-                            println!("  -> {}({})", call.name, call.arguments);
-                        }
+                        // This CLI does not yet dispatch tool calls or send results back
+                        // to the model. Never report a successful autonomous run here.
+                        return Err(format!(
+                            "Model requested {} tool call(s), but standalone tool execution is not implemented (issue #2)",
+                            resp.tool_calls.len()
+                        ).into());
                     }
                 }
                 Err(e) => {
