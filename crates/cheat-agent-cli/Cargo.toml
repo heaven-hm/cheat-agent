@@ -9,6 +9,10 @@ authors.workspace = true
 name = "cheat-agent"
 path = "src/main.rs"
 
+[lib]
+name = "cheat_agent_cli"
+path = "src/lib.rs"
+
 [dependencies]
 cheat-agent-core = { path = "../cheat-agent-core" }
 cheat-agent-ffi = { path = "../cheat-agent-ffi" }

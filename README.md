@@ -48,7 +48,7 @@ Operates directly inside **OpenAI Codex**, **Claude Code**, or other MCP-compati
 ```
 
 ### Mode B: Standalone AI Agent
-Provides experimental single-turn planning using direct model APIs or local model servers. Full autonomous tool dispatch is not implemented (see issue #2):
+Runs an autonomous multi-turn tool-dispatch loop using direct model APIs or local model servers:
 - **OpenAI API** (`gpt-4o`, `o1`, `gpt-4-turbo`)
 - **Anthropic API** (`claude-3-5-sonnet`)
 - **OpenRouter** (DeepSeek, Llama 3.3, Mistral)

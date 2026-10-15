@@ -7,7 +7,56 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
+    #[serde(default)]
     pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<Value>>,
+}
+
+impl ChatMessage {
+    pub fn system(content: impl Into<String>) -> Self {
+        Self {
+            role: "system".into(),
+            content: content.into(),
+            tool_call_id: None,
+            name: None,
+            tool_calls: None,
+        }
+    }
+
+    pub fn user(content: impl Into<String>) -> Self {
+        Self {
+            role: "user".into(),
+            content: content.into(),
+            tool_call_id: None,
+            name: None,
+            tool_calls: None,
+        }
+    }
+
+    pub fn assistant(content: impl Into<String>, tool_calls: Option<Vec<Value>>) -> Self {
+        Self {
+            role: "assistant".into(),
+            content: content.into(),
+            tool_call_id: None,
+            name: None,
+            tool_calls,
+        }
+    }
+
+    pub fn tool(tool_call_id: impl Into<String>, name: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: "tool".into(),
+            content: content.into(),
+            tool_call_id: Some(tool_call_id.into()),
+            name: Some(name.into()),
+            tool_calls: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +82,34 @@ pub trait LlmProvider: Send + Sync {
         messages: &[ChatMessage],
         tools: &[Value],
     ) -> Result<ModelResponse>;
+}
+
+#[derive(Default)]
+pub struct MockProvider {
+    responses: std::sync::Mutex<std::collections::VecDeque<ModelResponse>>,
+}
+
+impl MockProvider {
+    pub fn new(responses: Vec<ModelResponse>) -> Self {
+        Self {
+            responses: std::sync::Mutex::new(responses.into()),
+        }
+    }
+}
+
+#[async_trait]
+impl LlmProvider for MockProvider {
+    async fn chat_complete(
+        &self,
+        _model: &str,
+        _messages: &[ChatMessage],
+        _tools: &[Value],
+    ) -> Result<ModelResponse> {
+        let mut guard = self.responses.lock().map_err(|e| CheatError::Internal(e.to_string()))?;
+        guard.pop_front().ok_or_else(|| {
+            CheatError::Internal("MockProvider exhausted all scripted responses".to_string())
+        })
+    }
 }
 
 pub struct OpenAiProvider {
