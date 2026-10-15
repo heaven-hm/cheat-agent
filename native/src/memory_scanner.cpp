@@ -179,9 +179,11 @@ int32_t MemoryScanner::first_scan(
         if (!reg.is_readable || reg.size == 0) continue;
 
         uint64_t current_addr = reg.base_address;
+        if (reg.size > UINT64_MAX - reg.base_address) continue;
         uint64_t end_addr = reg.base_address + reg.size;
+        if (reg.size < data_size_) continue;
 
-        while (current_addr + data_size_ <= end_addr) {
+        while (current_addr <= end_addr - data_size_) {
             size_t bytes_to_read = static_cast<size_t>(std::min<uint64_t>(kChunkSize, end_addr - current_addr));
             size_t bytes_read = 0;
 
@@ -206,7 +208,10 @@ int32_t MemoryScanner::first_scan(
                 }
             }
 
-            current_addr += bytes_read;
+            // Move to the next aligned start address, retaining enough
+            // overlap to discover values spanning adjacent scan chunks.
+            const size_t advance = ((bytes_read - data_size_) / step + 1) * step;
+            current_addr += advance;
         }
     }
 
@@ -266,7 +271,7 @@ int32_t MemoryScanner::scan_aob(const std::string& pattern_str) {
     data_type_ = CHEAT_DATA_TYPE_AOB;
 
     auto parsed_pattern = PatternScanner::parse_pattern(pattern_str);
-    if (parsed_pattern.empty()) {
+    if (parsed_pattern.empty() || parsed_pattern.size() > kChunkSize) {
         return CHEAT_STATUS_INVALID_ARGUMENT;
     }
     data_size_ = parsed_pattern.size();
@@ -278,9 +283,10 @@ int32_t MemoryScanner::scan_aob(const std::string& pattern_str) {
         if (!reg.is_readable || reg.size < data_size_) continue;
 
         uint64_t current_addr = reg.base_address;
+        if (reg.size > UINT64_MAX - reg.base_address) continue;
         uint64_t end_addr = reg.base_address + reg.size;
 
-        while (current_addr + data_size_ <= end_addr) {
+        while (current_addr <= end_addr - data_size_) {
             size_t bytes_to_read = static_cast<size_t>(std::min<uint64_t>(kChunkSize, end_addr - current_addr));
             size_t bytes_read = 0;
 
