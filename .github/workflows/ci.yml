@@ -38,6 +38,12 @@ jobs:
       - name: Build Native Engine & Test Game
         run: cmake --build build --config Release
 
+      - name: Compile GTLibCpp-backed Project IGI trainer (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -B build -S . -DCHEAT_AGENT_BUILD_IGI_EXAMPLE=ON
+          cmake --build build --config Release --target igi_trainer
+
       - name: Run Native Unit Tests
         run: ctest --test-dir build --output-on-failure -C Release
 
