@@ -24,7 +24,7 @@ if(CHEAT_AGENT_ENABLE_GTLIBCPP)
         FetchContent_Declare(
             gtlibcpp
             GIT_REPOSITORY https://github.com/heaven-hm/gtlibcpp.git
-            GIT_TAG 716046b4f7a15340b57e4c372012c34382398d4b
+            GIT_TAG f9eb985e5bc4f8af058210ea78dedd1391f7eba9
         )
         FetchContent_MakeAvailable(gtlibcpp)
     endif()
@@ -61,6 +61,7 @@ endif()
 
 if(MSVC)
     target_compile_options(cheat_agent_native PRIVATE /W4 /permissive-)
+    target_compile_definitions(cheat_agent_native PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(cheat_agent_native PRIVATE -Wall -Wextra -Wpedantic)
 endif()

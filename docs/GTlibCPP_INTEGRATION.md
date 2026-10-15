@@ -9,7 +9,7 @@ This architecture gives the application one explicit memory-session interface wi
 ## Build and reproducibility
 
 The native CMake integration pins GTLibCpp to commit
-`71ed9a5d5ab502ae198a9808465ed93016fcb6e6` from its `develop` line,
+`f9eb985e5bc4f8af058210ea78dedd1391f7eba9` from its `develop` line,
 rather than following its older `master` branch. A sibling checkout
 `../gtlibcpp` is still preferred when present and may be at another revision,
 so verify that revision during release packaging.
