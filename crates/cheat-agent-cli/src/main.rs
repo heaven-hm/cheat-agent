@@ -4,7 +4,7 @@ use cheat_agent_core::DataType;
 use cheat_agent_ffi::{MemoryScanner, ProcessBackend};
 use cheat_agent_generators::TrainerGenerator;
 use cheat_agent_mcp::McpServer;
-use cheat_agent_providers::{ChatMessage, LlmProvider, OllamaProvider, OpenAiProvider};
+use cheat_agent_providers::{LlmProvider, OllamaProvider, OpenAiProvider};
 use cheat_agent_verifier::VerificationEngine;
 use std::fs;
 use std::path::PathBuf;
@@ -173,37 +173,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            let tools = McpServer::get_tools_list();
-            let tools_vec = tools.as_array().cloned().unwrap_or_default();
-
-            let messages = vec![
-                ChatMessage {
-                    role: "system".to_string(),
-                    content: "You are Cheat Agent, an expert cross-platform reverse-engineering and trainer-generation agent. Use the available tools to inspect memory, find values, resolve pointer chains, and generate verified trainers.".to_string(),
-                },
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: goal.clone(),
-                },
-            ];
-
-            println!("[+] Single-turn model planning mode (requested max iterations: {}; multi-turn tool execution not implemented)...", max_iterations);
-            match provider_box.chat_complete(&model, &messages, &tools_vec).await {
-                Ok(resp) => {
-                    if let Some(text) = resp.content {
-                        println!("\n[Agent]:\n{}", text);
-                    }
-                    if !resp.tool_calls.is_empty() {
-                        // This CLI does not yet dispatch tool calls or send results back
-                        // to the model. Never report a successful autonomous run here.
-                        return Err(format!(
-                            "Model requested {} tool call(s), but standalone tool execution is not implemented (issue #2)",
-                            resp.tool_calls.len()
-                        ).into());
-                    }
+            let mcp_server = McpServer::new();
+            match cheat_agent_cli::run_agent_loop(
+                provider_box.as_ref(),
+                &model,
+                &goal,
+                max_iterations,
+                &mcp_server,
+            )
+            .await
+            {
+                Ok(conclusion) => {
+                    println!("\n[+] Autonomous Agent Completed Successfully:\n{}", conclusion);
                 }
                 Err(e) => {
-                    eprintln!("[!] Provider request failed: {}", e);
+                    eprintln!("[!] Agent loop failed: {}", e);
                     return Err(Box::<dyn std::error::Error>::from(e));
                 }
             }
