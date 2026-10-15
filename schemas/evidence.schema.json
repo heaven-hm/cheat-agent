@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReAgentEvidenceEnvelope",
+  "description": "Schema for immutable evidence envelopes emitted by the Cheat Agent runtime analysis provider for RE-Agent",
+  "type": "object",
+  "required": [
+    "request_id",
+    "timestamp",
+    "operation",
+    "status",
+    "observations",
+    "artifacts",
+    "limitations"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "description": "Unique identifier for the operation request"
+    },
+    "target_identity": {
+      "type": ["object", "null"],
+      "description": "Verified executable identity and execution instance",
+      "required": ["pid", "architecture", "session_id"],
+      "properties": {
+        "pid": { "type": "integer" },
+        "executable_path": { "type": ["string", "null"] },
+        "architecture": { "type": "string" },
+        "session_id": { "type": "string" }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO 8601 UTC timestamp of execution"
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "target.attach",
+        "target.inspect",
+        "memory.regions",
+        "memory.scan.first",
+        "memory.scan.next",
+        "memory.aob",
+        "memory.pointer.resolve",
+        "memory.read",
+        "memory.write.preview",
+        "memory.write.commit",
+        "trainer.verify"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "denied", "error", "unsupported"]
+    },
+    "observations": {
+      "type": "object",
+      "description": "Structured, machine-readable findings and telemetry"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Associated hashes, memory dumps, or configuration snapshots"
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Explicit boundaries, untested assumptions, or environmental constraints"
+    }
+  },
+  "additionalProperties": false
+}
